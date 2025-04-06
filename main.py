@@ -371,22 +371,61 @@ async def get_loved_one_profile_query(phone_number: str):
                 # If it's a string, split it into a list
                 times = [t.strip().lower() for t in str(time_taken).split(',')]
             
+            # Create a formatted medication string with just the name (no dosage or instructions)
+            med_info = med_name
+            
             if any('morning' in t for t in times):
-                morning_meds.append(med_name)
+                morning_meds.append(med_info)
             if any('afternoon' in t for t in times):
-                afternoon_meds.append(med_name)
+                afternoon_meds.append(med_info)
             if any('evening' in t for t in times):
-                evening_meds.append(med_name)
+                evening_meds.append(med_info)
         
-        # Process appointments
+        # Process appointments, adding "today" if applicable
         upcoming_appointments = []
+        today_str = datetime.date.today().isoformat() # Get today's date as YYYY-MM-DD
+
         for appt in appointments:
+            appt_date_str = appt.get("appointment_date")
+            appt_time_str = appt.get("appointment_time")
+            appt_title = appt.get("appointment_title", "Appointment")
+            
+            # Format the time nicely (e.g., 4 PM instead of 16:00:00)
+            formatted_time = ""
+            if appt_time_str:
+                try:
+                    time_obj = datetime.datetime.strptime(appt_time_str, "%H:%M:%S").time()
+                    formatted_time = time_obj.strftime("%-I:%M %p") # e.g., 4:00 PM
+                except ValueError:
+                    formatted_time = appt_time_str # Keep original if format is unexpected
+
+            # Check if the appointment is today
+            if appt_date_str == today_str:
+                desc = f"{appt_title} today at {formatted_time}"
+            elif appt_date_str:
+                # Optional: Format future dates nicely too (e.g., "on Tuesday")
+                # For simplicity, we'll just use the date for now
+                desc = f"{appt_title} on {appt_date_str} at {formatted_time}"
+            else:
+                desc = f"{appt_title} at {formatted_time}" # If no date provided
+
             upcoming_appointments.append({
-                "title": appt["appointment_title"],
-                "date": appt["appointment_date"],
-                "time": appt["appointment_time"],
-                "frequency": appt["frequency"]
+                "title": appt_title,
+                "date": appt_date_str,
+                "time": appt_time_str, # Keep original time for potential other uses
+                "frequency": appt.get("frequency"),
+                "description": desc # Add the formatted description
             })
+
+        # Add current time information to help with medication timing
+        now = datetime.datetime.now()
+        
+        if 5 <= now.hour < 12:
+            time_of_day = "morning"
+        elif 12 <= now.hour < 17:
+            time_of_day = "afternoon"
+        else:
+            time_of_day = "evening"
         
         # Construct a clean, simplified profile
         clean_profile = {
@@ -404,7 +443,14 @@ async def get_loved_one_profile_query(phone_number: str):
                 "has_medications": len(medications) > 0,
                 "morning_medications": ", ".join(morning_meds) if morning_meds else "none",
                 "afternoon_medications": ", ".join(afternoon_meds) if afternoon_meds else "none",
-                "evening_medications": ", ".join(evening_meds) if evening_meds else "none"
+                "evening_medications": ", ".join(evening_meds) if evening_meds else "none",
+                "current_time_medications": ", ".join(morning_meds if time_of_day == "morning" else 
+                                                     afternoon_meds if time_of_day == "afternoon" else 
+                                                     evening_meds) if len(medications) > 0 else "none",
+                "needs_medication_now": str(len(morning_meds if time_of_day == "morning" else 
+                                           afternoon_meds if time_of_day == "afternoon" else 
+                                           evening_meds) > 0).lower(),
+                "time_of_day": time_of_day
             },
             "call_settings": {
                 "length": call_preferences.get("call_length", "medium"),
@@ -491,6 +537,17 @@ async def initiate_call(phone_number: str, request: Request):
         server_host = request.headers.get("host", request.url.hostname)
         server_scheme = request.url.scheme
         
+        # Add current time information
+        now = datetime.datetime.now()
+        hour = now.hour
+        
+        if 5 <= hour < 12:
+            time_of_day = "morning"
+        elif 12 <= hour < 17:
+            time_of_day = "afternoon"
+        else:
+            time_of_day = "evening"
+        
         # Use the local endpoint directly
         profile = await get_loved_one_profile_query(normalized_number)
         
@@ -518,6 +575,9 @@ async def initiate_call(phone_number: str, request: Request):
             "morning_medications": profile.get("medications", {}).get("morning_medications", "none"),
             "afternoon_medications": profile.get("medications", {}).get("afternoon_medications", "none"),
             "evening_medications": profile.get("medications", {}).get("evening_medications", "none"),
+            "current_time_medications": profile.get("medications", {}).get("current_time_medications", "none"),
+            "needs_medication_now": profile.get("medications", {}).get("needs_medication_now", "false"),
+            "time_of_day": profile.get("medications", {}).get("time_of_day", time_of_day),
             
             # Call settings
             "call_length": profile.get("call_settings", {}).get("length", "medium"),
@@ -545,27 +605,22 @@ async def initiate_call(phone_number: str, request: Request):
             dynamic_variables["next_appointment_title"] = next_appt.get("title", "")
             dynamic_variables["next_appointment_date"] = next_appt.get("date", "")
             dynamic_variables["next_appointment_time"] = next_appt.get("time", "")
+            dynamic_variables["next_appointment_description"] = next_appt.get("description", "")
             
-            # Create a formatted string for all appointments
+            # Create a formatted string using the new description field for the first 3 appointments
             appt_details = []
-            for i, appt in enumerate(appointments[:3]):  # Limit to first 3 appointments
-                appt_details.append(f"{appt.get('title')} on {appt.get('date')} at {appt.get('time')}")
+            for appt in appointments[:3]: 
+                # Use the description field which includes 'today' and formatted time
+                appt_details.append(appt.get("description", f"{appt.get('title', 'Appointment')} on {appt.get('date', 'Unknown date')}")) 
             
-            dynamic_variables["upcoming_appointments"] = ", ".join(appt_details)
+            dynamic_variables["upcoming_appointments"] = "; ".join(appt_details) # Use semicolon for clarity
         else:
             dynamic_variables["has_upcoming_appointment"] = "false"
             dynamic_variables["upcoming_appointments"] = "none"
-        
-        # Add current time information
-        now = datetime.datetime.now()
-        hour = now.hour
-        
-        if 5 <= hour < 12:
-            time_of_day = "morning"
-        elif 12 <= hour < 17:
-            time_of_day = "afternoon"
-        else:
-            time_of_day = "evening"
+            dynamic_variables["next_appointment_title"] = ""
+            dynamic_variables["next_appointment_date"] = ""
+            dynamic_variables["next_appointment_time"] = ""
+            dynamic_variables["next_appointment_description"] = ""
             
         dynamic_variables["time_of_day"] = time_of_day
         
@@ -588,7 +643,13 @@ async def initiate_call(phone_number: str, request: Request):
         )
         
         print(f"Call initiated successfully: {response}")
-        return {"status": "success", "call_sid": response.get("callSid", "")}
+        # Handle the response properly - it's a custom object, not a dictionary
+        try:
+            call_sid = response.call_sid if hasattr(response, 'call_sid') else ""
+            return {"status": "success", "call_sid": call_sid}
+        except Exception as e:
+            print(f"Error handling response: {str(e)}")
+            return {"status": "success", "message": "Call initiated, but couldn't parse callSid"}
         
     except Exception as e:
         print(f"Error initiating call: {str(e)}")
