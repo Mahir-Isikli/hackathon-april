@@ -53,15 +53,20 @@ This FastAPI application acts as the bridge between Twilio (for handling phone c
     pip install -r requirements.txt
     ```
 
-4.  **Create a `.env` file:**
-    Create a file named `.env` in the `hackathon` directory and add the following environment variables with your actual credentials:
+4.  **Set up environment variables:**
+    Copy the example environment file:
+    ```bash
+    cp .env.example .env
+    ```
+    Now, open the newly created `.env` file in your editor and fill in your actual credentials for each variable:
     ```dotenv
-    ELEVENLABS_AGENT_ID=your_elevenlabs_agent_id
-    ELEVENLABS_API_KEY=your_elevenlabs_api_key
-    ELEVENLABS_AGENT_PHONE_ID=your_elevenlabs_agent_phone_number_id
-    SUPABASE_URL=your_supabase_url
-    SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-    WEBHOOK_SECRET=your_elevenlabs_webhook_secret
+    # Contents of .env file after filling in values
+    ELEVENLABS_AGENT_ID=your_actual_agent_id
+    ELEVENLABS_API_KEY=your_actual_api_key
+    ELEVENLABS_AGENT_PHONE_ID=your_actual_agent_phone_id 
+    SUPABASE_URL=https://your-project.supabase.co
+    SUPABASE_SERVICE_ROLE_KEY=your_actual_service_role_key
+    WEBHOOK_SECRET=your_actual_webhook_secret
     ```
     *   `ELEVENLABS_AGENT_PHONE_ID`: Find this in your ElevenLabs Voice settings under the specific agent phone number.
     *   `WEBHOOK_SECRET`: Set this in your ElevenLabs agent settings under 'Call Termination Webhook'.
