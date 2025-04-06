@@ -1,6 +1,9 @@
-# AI Companion Caller - Hackathon Backend (April 5th-6th, 2024)
+# AI Companion Caller - Backend
+## Hackathon Project (April 5th-6th, 2024)
 
-This repository contains the backend server for the AI Companion Caller project, developed for the hackathon held on April 5th-6th, 2024.
+This repository contains the **backend server** for the AI Companion Caller project, developed for the hackathon held on April 5th-6th, 2024.
+
+**Frontend Repository**: [https://github.com/jouv1/coucou](https://github.com/jouv1/coucou)
 
 This FastAPI application acts as the bridge between Twilio (for handling phone calls) and ElevenLabs (for providing a conversational AI agent). It manages call state, retrieves user/loved one profiles from Supabase, and initiates/receives calls.
 
